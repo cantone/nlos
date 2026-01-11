@@ -1,0 +1,56 @@
+{
+  "name": "nlos",
+  "version": "1.0.0",
+  "description": "Natural Language Operating System - A model-agnostic kernel for any LLM",
+  "main": "bin/nlos.js",
+  "bin": {
+    "nlos": "./bin/nlos.js"
+  },
+  "scripts": {
+    "test": "node bin/nlos.js verify",
+    "boot": "node bin/nlos.js boot",
+    "payload": "node bin/nlos.js payload --all"
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "natural-language",
+    "operating-system",
+    "ollama",
+    "claude",
+    "gpt",
+    "llama",
+    "cognitive",
+    "cli"
+  ],
+  "author": "Chris Antone",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cantone/nlos.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin/",
+    "portable/",
+    "scripts/",
+    ".cursor/commands/",
+    "projects/README.md",
+    "KERNEL.md",
+    "KERNEL.yaml",
+    "memory.md",
+    "AGENTS.md",
+    "axioms.yaml",
+    "personalities.md",
+    "README.md",
+    "QUICKSTART.md",
+    "LICENSE"
+  ],
+  "preferGlobal": true,
+  "bugs": {
+    "url": "https://github.com/cantone/nlos/issues"
+  },
+  "homepage": "https://github.com/cantone/nlos#readme"
+}

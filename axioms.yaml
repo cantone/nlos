@@ -1,0 +1,437 @@
+# Capturebox Axioms — Canonical Assertion Layer
+# This file defines what the system treats as ground truth.
+# LLMs and agents should load this as part of boot order.
+# Machine-checkable assertions can be verified via scripts/axiom_lint.py (future).
+#
+# Version: 1.0.0
+# Last updated: 2025-12-12
+
+---
+
+meta:
+  purpose: |
+    Define canonical facts, definitions, and invariants for Capturebox.
+    This is a constitution, not a compiler — it steers LLM behavior with high
+    probability and provides verification hooks for structural assertions.
+  enforcement:
+    structural: machine-checkable (file existence, path patterns)
+    semantic: LLM-enforceable (repeated assertion, explicit hierarchy)
+    behavioral: LLM + human-in-the-loop (confirmation before violation)
+
+---
+
+# PRIORITY ORDERING
+# When directives conflict, higher beats lower.
+priority:
+  - user_instruction        # 1 - highest: explicit user request in chat
+  - memory.md               # 2 - behavioral directives, tone, style
+  - AGENTS.md               # 3 - agent kernel, hard invariants
+  - command_spec            # 4 - .cursor/commands/<command>.md
+  - system_readme           # 5 - projects/systems/<system>/README.md
+  - knowledge_index         # 6 - knowledge/_index.yaml
+
+---
+
+# CANONICAL PATHS
+# Where things live. Machine-checkable.
+paths:
+  # Core directive files
+  directive_stack: memory.md
+  agent_kernel: AGENTS.md
+  axioms: axioms.yaml
+
+  # Command system
+  slash_commands: .cursor/commands/
+  command_index: .cursor/commands/COMMAND-MAP.md
+
+  # Systems architecture
+  systems: projects/systems/
+  system_overview: projects/README.md
+
+  # Knowledge layer
+  knowledge: knowledge/
+  knowledge_index: knowledge/_index.yaml
+  knowledge_schema: knowledge/_schema.md
+
+  # Skills layer
+  skills: .cursor/skills/
+  skills_index: .cursor/skills/_index.yaml
+
+  # Output destinations
+  docs_output: docs/
+  active_work: projects/active/
+  notes_dailies: docs/notes/dailies/
+  notes_scratchpads: docs/notes/scratchpads/
+  reflections_weekly: docs/reflections/weekly/
+
+  # Append-only logs
+  hype_log: projects/systems/hype-system/hype.log
+  hype_append_protocol: projects/systems/hype-system/APPEND_PROTOCOL.md
+
+---
+
+# SEMANTIC DEFINITIONS
+# What terms mean in this system. LLM-enforceable.
+definitions:
+  system: |
+    A reusable framework in projects/systems/ that generates artifacts through
+    human-in-the-loop interaction. Systems are cognitive accelerators, not
+    automation engines. The human works through the system; the system does
+    not work for the human.
+
+  command: |
+    A slash-prefixed invocation (e.g., /note, /ux-writer) that triggers a
+    protocol defined in .cursor/commands/<command>.md. Commands transform
+    input into structured output according to their spec.
+
+  capture_command: |
+    A command that records literal content without interpretation.
+    Examples: /note, /scratchpad, /capture (deprecated).
+    Everything after the command is content to record, not instructions.
+
+  operational_command: |
+    A command that transforms input according to its protocol.
+    Examples: /enhance-prompt, /ux-writer, /run-recipe, /design-spec.
+    The text after the command is input/arguments for the command.
+
+  knowledge_file: |
+    A file in knowledge/ with frontmatter metadata (type, answers, use_when,
+    pairs_with). Knowledge files are indexed in knowledge/_index.yaml and
+    loaded on-demand based on task context.
+
+  skill: |
+    An opt-in protocol in .cursor/skills/ that provides optimized behavior for
+    specific tasks (e.g., knowledge retrieval, safe file operations). Skills are
+    invoked explicitly and don't block ambient access to their domains.
+
+  directive: |
+    An instruction that governs agent behavior. Directives have priority
+    ordering (see priority section). Higher-priority directives override
+    lower-priority ones.
+
+  invariant: |
+    A hard constraint that must never be violated without explicit user
+    override. Invariants are defined in AGENTS.md and this file.
+
+# KNOWLEDGE RETRIEVAL
+# Opt-in optimizer for token-efficient access to knowledge/
+knowledge_retrieval:
+  protocol: index_first
+  default_budget_tokens: 80000
+  skill_path: .cursor/skills/knowledge-retrieval/SKILL.md
+  description: |
+    Opt-in optimizer for token-efficient access to knowledge/.
+    Systems invoke the skill for structured retrieval (index → metadata matching
+    → co-retrieval hints). Creative tasks retain ambient access without invoking.
+
+---
+
+# THREE-LAYER ARCHITECTURE
+# The conceptual model behind Capturebox's structure.
+architecture:
+  description: |
+    Capturebox follows a three-layer architecture where each layer has distinct
+    responsibilities. The boot order reflects this hierarchy: kernel loads first,
+    systems define behavior, commands invoke systems.
+
+  layers:
+    kernel:
+      location: "memory.md, AGENTS.md, axioms.yaml"
+      responsibility: "Tone, safety, meta-rules, canonical assertions"
+      loads: "Always, on every task"
+
+    systems:
+      location: "projects/systems/**"
+      responsibility: "Semantics, phases, constraints, components, output routing"
+      loads: "On-demand, when system is activated"
+
+    commands:
+      location: ".cursor/commands/**"
+      responsibility: "User-facing entrypoints that bind runtime to systems"
+      loads: "When invoked by user"
+
+  principle: |
+    Systems are bounded agent programs, not a monolith. Each system has:
+    - A canonical operating model / philosophy doc
+    - A concrete slash-command interface
+    - Modular components (protocols/templates/gates)
+    - Explicit output routing into docs/, data/, or logs
+    The repetition is a feature: it's an affordance for portability.
+
+  doctrine: |
+    Every system implements human-in-the-loop epistemic control. The operator
+    is the decision-maker; the model is the transform. Systems teach, not decide.
+    They may recommend or suggest options in priority order, but the human picks.
+    They demand evidence, not assertion.
+
+---
+
+# COMMAND CLASSIFICATION
+# How to interpret text after slash commands.
+commands:
+  capture_class:
+    # Treat everything after command as LITERAL CONTENT to record
+    - /note
+    - /scratchpad
+    - /capture  # deprecated, use /note
+
+  transform_class:
+    # Treat input as draft content to transform (not execute)
+    # Return only transformed output
+    - /enhance-prompt  # input is draft prompt, output is improved prompt
+
+  operational_class:
+    # Treat input as arguments, run command protocol from spec
+    # Examples (non-exhaustive):
+    - /ux-writer
+    - /ux-blog
+    - /run-recipe
+    - /design-spec
+    - /user-scenario
+    - /persona-system
+    - /perf-writer
+    - /research-quick
+    - /research-deep
+    - /elicit
+    - /problem-solver
+
+  session_class:
+    # Session management, context control
+    - /fresh-eyes
+    - /checkpoint
+    - /compress-context
+    - /whats-next
+
+  utility_class:
+    # File operations, checks, formatting
+    - /check-emojis
+    - /remove-emojis
+    - /format-md-table
+    - /add-frontmatter
+    - /eval-knowledge
+    - /skills
+
+  nested_slash_handling: |
+    If argument text contains additional /... sequences, treat them as
+    LITERAL TEXT unless the command spec explicitly says to parse/execute
+    nested slash commands. Most commands do not.
+
+---
+
+# INVARIANTS
+# Hard constraints. Never violate without explicit user override.
+invariants:
+  no_emojis:
+    rule: "No emoji-range pictographs (U+1F300-U+1F9FF) in file output"
+    allowed: "Standard Unicode symbols (checkmarks, arrows, box drawing)"
+    preference: "Plain ASCII when uncertain"
+
+  append_only_logs:
+    rule: "hype.log is append-only"
+    protocol: |
+      1. Read existing content first
+      2. Use search_replace tool (not write tool)
+      3. Append new entries after final --- marker
+      4. Never overwrite, truncate, or replace existing entries
+    reference: projects/systems/hype-system/APPEND_PROTOCOL.md
+
+  frontmatter_preserved:
+    rule: "Never delete, reorder, or normalize frontmatter unless explicitly asked"
+    applies_to: "All files with YAML frontmatter (--- delimited)"
+
+  empty_files_forbidden:
+    rule: "Never create or leave empty files"
+    action: "If content is uncertain, ask before creating"
+
+  no_destructive_ops:
+    rule: "No delete/move without explicit user confirmation"
+    action: "Propose exact operation, wait for confirmation"
+
+  no_recursive_deletes:
+    rule: "Never run rm -rf or mass deletions"
+    action: "Incremental cleanup with safeguards"
+
+  patch_over_rewrite:
+    rule: "Prefer smallest possible diff"
+    scope: "Especially knowledge/, docs/, projects/systems/"
+    exception: "Whole-file rewrite only when explicitly requested or when patch would be more error-prone"
+
+  citation_hygiene:
+    rule: "Never fabricate citations that look like real sources"
+    applies_to: "Evidence, sources, dates, studies, interviews, analytics"
+    behavior: |
+      When generating scenarios, reports, or documents that reference evidence:
+      1. REAL SOURCES: Cite actual files from knowledge/ or docs/ with accurate paths
+      2. ILLUSTRATIVE EXAMPLES: Mark clearly as "[ILLUSTRATIVE]" or "[FICTIONAL EXAMPLE]"
+      3. MISSING EVIDENCE: Flag explicitly as "[EVIDENCE NEEDED]" rather than inventing
+      4. DATES: Do not fabricate specific dates (e.g., "Nov 2025", "Q4 2025") for fictional
+         research — use generic framing ("typical SOC workflow") or flag as illustrative
+    rationale: |
+      Fabricated citations with specific dates create false confidence in evidence chains.
+      This is especially harmful in design/UX work where scenarios inform real decisions.
+
+---
+
+# SYSTEM ACTIVATION
+# Systems are NOT active by default. Activate on explicit user request.
+system_activation:
+  persona_as_agent:
+    triggers:
+      - "persona"
+      - "SAM"
+      - "REMI"
+      - "ALEX"
+      - "KIT"
+      - "NIK"
+      - "persona validation"
+    load: projects/systems/persona-as-agent/core-operating-model.md
+
+  writing_coach:
+    triggers:
+      - "book"
+      - "fiction"
+      - "Markos"
+      - "Little AI Bro"
+    load: recipe-files/operating-model-stack.md
+
+  self_writer:
+    triggers:
+      - /perf-writer
+      - /self-reflect
+      - /self-checkin
+    load: projects/systems/self-writer-system/README.md
+
+  ux_blog:
+    triggers:
+      - /ux-blog
+    load: projects/systems/ux-blog-system/README.md
+
+  ux_writer:
+    triggers:
+      - /ux-writer
+      - /ux-voice-check
+    load: projects/systems/ux-writer-system/README.md
+
+  design_thinking:
+    triggers:
+      - /design-spec
+      - /user-scenario
+      - "constraint analysis"
+    load: projects/systems/design-thinking-system/README.md
+
+  signal_to_action:
+    triggers:
+      - /run-recipe
+    load: projects/systems/signal-to-action/README.md
+
+  lateral_os:
+    triggers:
+      - /lsp-full
+      - /lsp-quick
+      - /lsp-refract
+      - /lsp-chaos
+      - /lsp-violate
+    load: projects/systems/lateral-os/README.md
+
+---
+
+# FILE CREATION RULES
+# Where new files should be created.
+file_creation:
+  slash_commands:
+    location: .cursor/commands/
+    never:
+      - docs/commands/  # deprecated, non-canonical
+      - docs/           # wrong location for commands
+
+  knowledge_files:
+    location: knowledge/
+    requirements:
+      - frontmatter with type, answers, use_when, pairs_with
+      - entry in knowledge/_index.yaml (after creation)
+
+  note_files:
+    method: "Use /note command"
+    never: "Manually create in docs/notes/"
+
+  system_files:
+    location: projects/systems/<system-name>/
+    structure: "Follow existing system patterns (README.md, commands/, etc.)"
+
+  portability_notes:
+    recommendation: |
+      Include a "Portability Notes" section in command files and system documentation
+      to enable reuse in other workspaces. This section should document:
+      - Required dependencies (files, directories, other commands)
+      - Setup steps for porting to a new workspace
+      - What can be copied standalone vs. what requires system context
+      - Any workspace-specific assumptions or paths
+    applies_to:
+      - .cursor/commands/*.md (command files)
+      - projects/systems/*/README.md (system documentation)
+      - projects/systems/*/doc-*.md (system reference docs)
+    example: |
+      ## Portability Notes
+      
+      This command is self-contained. To use in another workspace:
+      
+      1. Copy this file to [workspace]/.cursor/commands/[command].md
+      2. Ensure [dependency] exists (for [purpose])
+      3. Ensure [directory] exists (for [output])
+      4. Run with /[command] and provide [required input]
+      
+      No dependencies on other commands, but references [system] structure.
+    rationale: |
+      Portability is a core design principle (see architecture.principle). Documenting
+      portability enables commands and systems to be reused across workspaces, making
+      the natural language OS more composable and extensible.
+
+---
+
+# BOOT ORDER
+# When an agent enters Capturebox, load in this order.
+boot_order:
+  1: memory.md                          # Behavioral directives
+  2: AGENTS.md                          # Agent kernel, hard invariants
+  3: axioms.yaml                        # This file (canonical assertions)
+  4: projects/README.md                 # Systems overview
+  5: .cursor/commands/COMMAND-MAP.md    # Command index
+  6: knowledge/README.md                # Knowledge architecture (if needed)
+  7: knowledge/_index.yaml              # Knowledge index (if needed)
+
+note: |
+  If a task references a specific system or command, open that system/command
+  spec before acting. Don't load everything — load what's relevant.
+
+---
+
+# VERIFICATION HOOKS (future)
+# Machine-checkable assertions for scripts/axiom_lint.py
+verification:
+  path_exists:
+    - memory.md
+    - AGENTS.md
+    - axioms.yaml
+    - .cursor/commands/COMMAND-MAP.md
+    - projects/README.md
+    - knowledge/_index.yaml
+    - projects/systems/hype-system/hype.log
+
+  commands_in_canonical_location:
+    pattern: ".cursor/commands/*.md"
+    not_in:
+      - "docs/commands/"
+
+  knowledge_has_frontmatter:
+    pattern: "knowledge/**/*.md"
+    required_fields:
+      - type
+      - answers
+      - use_when
+
+  no_emojis_in_output:
+    pattern: "**/*.md"
+    exclude:
+      - "clippings/**"  # external content may have emojis
+    forbidden_ranges:
+      - "U+1F300-U+1F9FF"  # emoji pictographs

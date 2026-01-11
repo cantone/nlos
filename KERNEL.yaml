@@ -1,0 +1,189 @@
+# KERNEL.yaml - NL-OS Platform Configuration
+# Source of truth for model/platform abstraction
+#
+# Purpose:
+#   - Abstract model-specific configuration from kernel files
+#   - Enable portable boot across any LLM runtime
+#   - Define capability requirements (not model names)
+#   - Integrate with existing llms/model-catalog.yaml for local inference
+#
+# Version: 1.0.0
+# Last updated: 2026-01-11
+
+schema_version: "1.0"
+
+# ============================================================================
+# RUNTIME ENVIRONMENT DETECTION
+# ============================================================================
+# The boot process detects which runtime is available and configures accordingly
+
+runtime:
+  detection_order:
+    - claude_code    # Claude Code CLI (claude.ai/code)
+    - cursor         # Cursor IDE with Claude/GPT
+    - ollama         # Local via Ollama (ollama serve)
+    - llama_cpp      # Local via llama.cpp CLI
+    - lm_studio      # Local via LM Studio
+    - openai_api     # OpenAI-compatible API
+    - anthropic_api  # Anthropic API direct
+    - generic        # Any capable LLM with system prompt
+
+  current: auto      # Set to specific runtime to override detection
+
+# ============================================================================
+# CAPABILITY REQUIREMENTS
+# ============================================================================
+# Define what the kernel needs, not which model provides it
+
+capabilities:
+  minimum:
+    context_window: 16000      # Minimum tokens for kernel boot (~10.6K)
+    instruction_following: true
+    structured_output: true    # Can produce consistent markdown
+
+  recommended:
+    context_window: 128000     # Full context for deep work
+    code_execution: false      # Not required - all protocol-based
+    tool_use: false            # Not required - slash commands are pure NL
+
+  optimal:
+    context_window: 200000
+    extended_thinking: true    # For deep mode operations
+
+# ============================================================================
+# BOOT PAYLOAD CONFIGURATION
+# ============================================================================
+# What gets loaded and in what order
+
+boot_tiers:
+  mandatory:
+    files:
+      - memory.md               # ~4,600 tokens - behavioral directives
+      - AGENTS.md               # ~1,200 tokens - hard invariants
+      - axioms.yaml             # ~4,800 tokens - definitions
+    total_tokens: 10600
+    required: true
+
+  lazy:
+    files:
+      - personalities.md        # ~3,600 tokens - voice presets
+      - .cursor/commands/COMMAND-MAP.md  # ~1,350 tokens
+    total_tokens: 4950
+    triggers:
+      personalities.md: /assume
+      COMMAND-MAP.md: /sys-ref
+
+  extended:
+    files:
+      - projects/README.md      # Systems overview
+      - knowledge/_index.yaml   # Knowledge index
+    load_when: user_requests_full_context
+
+# ============================================================================
+# RUNTIME CONFIGURATIONS
+# ============================================================================
+# How to boot on each platform
+
+platforms:
+  claude_code:
+    boot_method: auto           # KERNEL.md read automatically via directory hierarchy
+    kernel_file: KERNEL.md      # Entry point
+    context_injection: native   # Context provided by tool
+    session_persistence: true
+
+  cursor:
+    boot_method: rules_file     # .cursorrules auto-loaded
+    kernel_file: KERNEL.md
+    context_injection: via_rules
+    session_persistence: false
+    additional_files:
+      - .cursorrules            # Auto-injected
+
+  ollama:
+    boot_method: system_prompt  # Concatenate kernel to system
+    context_injection: manual
+    session_persistence: false
+    boot_script: scripts/kernel-boot-ollama.sh
+    model_catalog: llms/model-catalog.yaml
+    default_model: qwen2.5:3b
+
+  llama_cpp:
+    boot_method: system_prompt
+    context_injection: manual
+    session_persistence: false
+    boot_script: scripts/kernel-boot-llama-cpp.sh
+
+  lm_studio:
+    boot_method: system_prompt
+    context_injection: manual
+    session_persistence: true
+    boot_script: scripts/kernel-boot-lm-studio.sh
+
+  generic:
+    boot_method: system_prompt
+    context_injection: manual
+    session_persistence: false
+    boot_payload: portable/kernel-payload.md
+
+# ============================================================================
+# PORTABLE PAYLOAD GENERATION
+# ============================================================================
+# Settings for generating standalone boot payloads
+
+payload_generator:
+  output_dir: portable/
+  formats:
+    - markdown                  # Single concatenated MD file
+    - json                      # Structured for API injection
+    - text                      # Plain text for CLI
+  include_instructions: true    # Add "how to use this payload" header
+  compression: false            # Keep human-readable
+
+# ============================================================================
+# INTEGRATION WITH LOCAL LLM INFRASTRUCTURE
+# ============================================================================
+# References to existing llms/ system
+
+local_llm:
+  catalog: llms/model-catalog.yaml
+  dashboard: llms/dashboard/llm-dashboard.py
+  profiles:
+    - speed
+    - balanced
+    - quality
+    - memory_constrained
+  default_profile: balanced
+
+# ============================================================================
+# MODEL PREFERENCES BY TASK
+# ============================================================================
+# Capability-based routing (extends llms/model-catalog.yaml pattern)
+
+task_routing:
+  kernel_boot:
+    capability: instruction_following
+    context_budget: 15500      # Full boot with lazy tier
+
+  creative_work:
+    capability: extended_context
+    preferred_profile: quality
+
+  extraction:
+    capability: structured_output
+    preferred_profile: speed
+
+  synthesis:
+    capability: reasoning
+    preferred_profile: balanced
+
+# ============================================================================
+# BACKWARDS COMPATIBILITY
+# ============================================================================
+# Mappings for legacy references
+
+aliases:
+  files:
+    CLAUDE.md: KERNEL.md       # Symlink maintained for CC auto-loading
+  commands:
+    /claude-boot: /kernel-boot
+    ./claude-boot: ./kernel-boot
