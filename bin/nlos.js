@@ -112,6 +112,40 @@ function showTokens() {
   }
 }
 
+// Command preamble - explicit rules that help ALL models parse commands correctly
+const COMMAND_PREAMBLE = `# NL-OS COMMAND RULES (READ FIRST)
+
+When user input starts with "/" or "./", it is a COMMAND, not a file path.
+
+## CRITICAL: How to Handle Commands
+
+1. "/" or "./" prefix = COMMAND (never a file path)
+2. Look up the command behavior below
+3. Execute that behavior directly
+4. Do NOT give generic file/directory help
+
+## Core Commands
+
+| Command | Behavior |
+|---------|----------|
+| /hype | Generate 1-3 sentences of specific encouragement about their current work or recent accomplishment |
+| /note <text> | Acknowledge the note was captured. Do NOT execute actions described in the text |
+| /help | List these available commands |
+| /assume <name> | Adopt that personality (Quentin, Hugh, Doctor X) for the rest of session |
+| /fresh-eyes | Summarize conversation so far, offer to start fresh |
+| /deep | Switch to deeper reasoning mode, think step by step |
+
+## Boot Acknowledgment
+
+After loading this kernel, respond with:
+"Kernel loaded. Ready for operations."
+
+Then wait for user input.
+
+---
+
+`;
+
 function generatePayload(tier = 'mandatory', format = 'markdown') {
   let files = [...KERNEL_FILES.mandatory];
   if (tier === 'lazy' || tier === 'full') {
@@ -127,7 +161,8 @@ function generatePayload(tier = 'mandatory', format = 'markdown') {
     tokens,
   }));
 
-  const totalTokens = sections.reduce((sum, s) => sum + s.tokens, 0);
+  const preambleTokens = 250; // Approximate tokens for preamble
+  const totalTokens = sections.reduce((sum, s) => sum + s.tokens, 0) + preambleTokens;
   const timestamp = new Date().toISOString().split('T')[0];
 
   if (format === 'json') {
@@ -142,19 +177,14 @@ function generatePayload(tier = 'mandatory', format = 'markdown') {
     }, null, 2);
   }
 
-  // Markdown format
-  let output = `# NL-OS Kernel Payload
+  // Markdown format - preamble goes FIRST for all models
+  let output = COMMAND_PREAMBLE;
+
+  output += `# NL-OS Kernel Payload
 
 **Generated**: ${timestamp}
 **Tier**: ${tier}
 **Estimated tokens**: ~${totalTokens.toLocaleString()}
-
----
-
-## How to Use
-
-Paste this entire file as system prompt or context to any LLM.
-After loading, the model should acknowledge: "Kernel loaded. Ready for capturebox operations."
 
 ---
 
