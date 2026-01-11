@@ -112,6 +112,40 @@ function showTokens() {
   }
 }
 
+// Minimal kernel for small models (~500 tokens)
+const MINIMAL_KERNEL = `# YOU ARE NL-OS
+
+You are NL-OS, a Natural Language Operating System. You help users think and work.
+
+## YOUR FIRST RESPONSE
+
+Say exactly: "NL-OS ready."
+
+## COMMANDS
+
+When user message starts with ">", it is a command. Execute it:
+
+>hype = Give 1-2 sentences of encouragement about their work
+>note TEXT = Say "Noted." (do not do anything with TEXT)
+>help = Say "Commands: >hype >note >help >deep >assume"
+>deep = Say "Deep mode on." Then think step-by-step
+>assume NAME = Say "Now acting as NAME." Then roleplay as NAME
+
+## RULES
+
+1. ">" means command - execute it immediately
+2. Be helpful, concise, no emojis
+3. If unsure, ask for clarification
+
+## EXAMPLE
+
+User: >hype
+Assistant: You're making real progress. Keep that momentum going.
+
+User: hello
+Assistant: Hello! How can I help you today?
+`;
+
 // Command preamble - explicit rules that help ALL models parse commands correctly
 const COMMAND_PREAMBLE = `# YOU ARE NL-OS (Natural Language Operating System)
 
@@ -287,6 +321,7 @@ function chat(options = {}) {
   const {
     model = 'qwen2.5:3b',
     full = false,
+    minimal = false,
     profile = null,
   } = options;
 
@@ -304,18 +339,24 @@ function chat(options = {}) {
 
   log('blue', `Starting NL-OS chat session...`);
   log('cyan', `Model: ${selectedModel}`);
-  log('cyan', `Tier: ${full ? 'FULL' : 'MANDATORY'}`);
+  log('cyan', `Tier: ${minimal ? 'MINIMAL' : full ? 'FULL' : 'MANDATORY'}`);
   console.log();
 
   // Generate the kernel payload
   log('yellow', 'Building kernel payload...');
-  const payload = generatePayload(full ? 'full' : 'mandatory', 'markdown');
 
-  // Escape the payload for Modelfile SYSTEM directive
-  // Replace """ with escaped version and handle multiline
-  const escapedPayload = payload.replace(/"""/g, '\\"\\"\\"');
+  let payload;
+  let tokenEstimate;
 
-  const tokenEstimate = full ? '~15,500' : '~10,600';
+  if (minimal) {
+    // Use minimal kernel for small models
+    payload = MINIMAL_KERNEL;
+    tokenEstimate = '~500';
+  } else {
+    payload = generatePayload(full ? 'full' : 'mandatory', 'markdown');
+    tokenEstimate = full ? '~15,500' : '~10,600';
+  }
+
   log('green', `Kernel payload ready (${tokenEstimate} tokens)`);
   console.log();
 
@@ -336,6 +377,14 @@ function chat(options = {}) {
   log('yellow', 'Creating NL-OS model variant...');
   const modelfilePath = path.join(PACKAGE_ROOT, 'portable', '.Modelfile.nlos');
   const nlosModelName = 'nlos-kernel:latest';
+
+  // Delete old model to ensure fresh kernel
+  try {
+    execSync(`ollama rm ${nlosModelName}`, { stdio: 'pipe' });
+    log('cyan', 'Removed old kernel model');
+  } catch {
+    // Model didn't exist, that's fine
+  }
 
   const modelfileContent = `FROM ${selectedModel}
 SYSTEM """${payload}"""
@@ -443,9 +492,10 @@ ${colors.yellow}Commands:${colors.reset}
   tokens            Show token estimates
   help              Show this help message
 
-${colors.yellow}Boot Options:${colors.reset}
+${colors.yellow}Chat/Boot Options:${colors.reset}
   --model <name>    Model to use (default: qwen2.5:3b)
   --profile <name>  Use profile: speed, balanced, quality, memory_constrained
+  --minimal         Use minimal ~500 token kernel (best for small models)
   --full            Load full kernel (includes personalities)
   --dry-run         Preview system prompt without launching
   --runtime <name>  Runtime: ollama, llama-cpp, lm-studio (default: ollama)
@@ -458,6 +508,7 @@ ${colors.yellow}Payload Options:${colors.reset}
 
 ${colors.yellow}Examples:${colors.reset}
   nlos chat                           # Start interactive chat (recommended)
+  nlos chat --minimal                 # Use minimal kernel for small models (3B)
   nlos chat --model llama3.1:8b       # Chat with specific model
   nlos chat --profile quality --full  # Quality mode with full kernel
   nlos boot                           # Verify kernel loads (one-shot)
@@ -494,6 +545,8 @@ function parseArgs(args) {
       options.runtime = args[++i];
     } else if (arg === '--full') {
       options.full = true;
+    } else if (arg === '--minimal') {
+      options.minimal = true;
     } else if (arg === '--dry-run') {
       options.dryRun = true;
     } else if (arg === '--all') {
