@@ -319,14 +319,26 @@ function boot(options = {}) {
 
 function chat(options = {}) {
   const {
-    model = 'qwen2.5:3b',
+    model = null,  // null means check config
     full = false,
     minimal = false,
     profile = null,
   } = options;
 
-  // Resolve model based on profile
-  let selectedModel = model;
+  // Resolve model: CLI flag > config file > profile > default
+  let selectedModel = 'qwen2.5:3b';
+
+  // Check .nlos.yaml for default
+  const configPath = path.join(process.cwd(), '.nlos.yaml');
+  if (fs.existsSync(configPath)) {
+    const config = fs.readFileSync(configPath, 'utf-8');
+    const match = config.match(/default_model:\s*(\S+)/);
+    if (match) {
+      selectedModel = match[1];
+    }
+  }
+
+  // Profile overrides config
   if (profile) {
     const profiles = {
       speed: 'qwen2.5:3b',
@@ -334,7 +346,12 @@ function chat(options = {}) {
       quality: 'llama3.1:8b',
       memory_constrained: 'qwen2.5:3b',
     };
-    selectedModel = profiles[profile] || model;
+    selectedModel = profiles[profile] || selectedModel;
+  }
+
+  // CLI flag overrides everything
+  if (model) {
+    selectedModel = model;
   }
 
   log('blue', `Starting NL-OS chat session...`);
@@ -475,6 +492,112 @@ function payload(options = {}) {
       log('green', `Payload saved to: ${outputPath}`);
     }
   }
+}
+
+function model(args = []) {
+  const subcommand = args[0];
+  const modelName = args[1];
+
+  const configPath = path.join(process.cwd(), '.nlos.yaml');
+  const hasLocalConfig = fs.existsSync(configPath);
+
+  // Recommended models by capability
+  const recommended = {
+    'qwen2.5:3b': { size: '1.9GB', context: '32K', note: 'Fast, minimal capability' },
+    'qwen2.5:7b': { size: '4.4GB', context: '32K', note: 'Good balance' },
+    'llama3.1:8b': { size: '4.7GB', context: '128K', note: 'Strong reasoning' },
+    'mistral:7b': { size: '4.1GB', context: '32K', note: 'Fast, good quality' },
+    'llama3.2:3b': { size: '2.0GB', context: '128K', note: 'Newest small model' },
+    'deepseek-r1:8b': { size: '4.9GB', context: '64K', note: 'Strong reasoning' },
+  };
+
+  if (!subcommand || subcommand === 'list') {
+    log('blue', 'Recommended models for NL-OS:\n');
+    console.log(`${'Model'.padEnd(20)} ${'Size'.padEnd(10)} ${'Context'.padEnd(10)} Note`);
+    console.log('─'.repeat(60));
+    for (const [name, info] of Object.entries(recommended)) {
+      console.log(`${name.padEnd(20)} ${info.size.padEnd(10)} ${info.context.padEnd(10)} ${info.note}`);
+    }
+    console.log();
+    log('yellow', 'Commands:');
+    console.log('  nlos model use <name>    Set as default and pull if needed');
+    console.log('  nlos model pull <name>   Just pull the model');
+    console.log('  nlos model current       Show current default');
+    return;
+  }
+
+  if (subcommand === 'current') {
+    if (hasLocalConfig) {
+      const config = fs.readFileSync(configPath, 'utf-8');
+      const match = config.match(/default_model:\s*(\S+)/);
+      if (match) {
+        log('green', `Current model: ${match[1]}`);
+      } else {
+        log('yellow', 'No default model set. Using: qwen2.5:3b');
+      }
+    } else {
+      log('yellow', 'No .nlos.yaml found. Run "nlos init" first, or using default: qwen2.5:3b');
+    }
+    return;
+  }
+
+  if (subcommand === 'pull') {
+    if (!modelName) {
+      log('red', 'Usage: nlos model pull <name>');
+      return;
+    }
+    log('blue', `Pulling ${modelName}...`);
+    try {
+      execSync(`ollama pull ${modelName}`, { stdio: 'inherit' });
+      log('green', `\nModel ${modelName} ready!`);
+    } catch (error) {
+      log('red', `Failed to pull: ${error.message}`);
+    }
+    return;
+  }
+
+  if (subcommand === 'use' || subcommand === 'set') {
+    if (!modelName) {
+      log('red', 'Usage: nlos model use <name>');
+      return;
+    }
+
+    // Pull model if not present
+    log('blue', `Setting up ${modelName}...\n`);
+    try {
+      execSync(`ollama list | grep -q "^${modelName.split(':')[0]}"`, { stdio: 'pipe' });
+      log('cyan', `Model ${modelName} already pulled`);
+    } catch {
+      log('yellow', `Pulling ${modelName}...`);
+      try {
+        execSync(`ollama pull ${modelName}`, { stdio: 'inherit' });
+      } catch (error) {
+        log('red', `Failed to pull: ${error.message}`);
+        return;
+      }
+    }
+
+    // Update .nlos.yaml if it exists
+    if (hasLocalConfig) {
+      let config = fs.readFileSync(configPath, 'utf-8');
+      if (config.includes('default_model:')) {
+        config = config.replace(/default_model:\s*\S+/, `default_model: ${modelName}`);
+      } else {
+        config += `\nkernel:\n  default_model: ${modelName}\n`;
+      }
+      fs.writeFileSync(configPath, config);
+      log('green', `\nDefault model set to: ${modelName}`);
+      console.log(`\nRun ${colors.cyan}nlos chat --minimal${colors.reset} to start`);
+    } else {
+      log('green', `\nModel ${modelName} ready!`);
+      console.log(`\nRun ${colors.cyan}nlos chat --minimal --model ${modelName}${colors.reset} to start`);
+      console.log(`Or run ${colors.cyan}nlos init${colors.reset} first to save as default`);
+    }
+    return;
+  }
+
+  log('red', `Unknown subcommand: ${subcommand}`);
+  console.log('Use: nlos model list|use|pull|current');
 }
 
 function clean(options = {}) {
@@ -667,6 +790,7 @@ ${colors.yellow}Usage:${colors.reset}
 ${colors.yellow}Commands:${colors.reset}
   init              Initialize NL-OS workspace in current directory
   chat              Interactive NL-OS chat session (recommended)
+  model             Manage models (list, use, pull, current)
   clean             Remove Ollama model and optionally local files
   boot              Boot NL-OS and verify kernel loads
   payload           Generate portable kernel payloads
@@ -755,6 +879,10 @@ switch (command) {
 
   case 'clean':
     clean(options);
+    break;
+
+  case 'model':
+    model(args.slice(1));
     break;
 
   case 'chat':
