@@ -6,7 +6,8 @@
  * A model-agnostic kernel that turns any LLM into a cognitive operating system.
  *
  * Usage:
- *   nlos boot [options]     Boot NL-OS with a local LLM
+ *   nlos chat [options]     Interactive NL-OS chat session (recommended)
+ *   nlos boot [options]     Boot NL-OS and verify kernel loads
  *   nlos payload [options]  Generate portable kernel payloads
  *   nlos verify             Verify kernel files exist
  *   nlos tokens             Show token estimates
@@ -247,6 +248,79 @@ function boot(options = {}) {
   }
 }
 
+function chat(options = {}) {
+  const {
+    model = 'qwen2.5:3b',
+    full = false,
+    profile = null,
+  } = options;
+
+  // Resolve model based on profile
+  let selectedModel = model;
+  if (profile) {
+    const profiles = {
+      speed: 'qwen2.5:3b',
+      balanced: 'mistral:7b',
+      quality: 'llama3.1:8b',
+      memory_constrained: 'qwen2.5:3b',
+    };
+    selectedModel = profiles[profile] || model;
+  }
+
+  log('blue', `Starting NL-OS chat session...`);
+  log('cyan', `Model: ${selectedModel}`);
+  log('cyan', `Tier: ${full ? 'FULL' : 'MANDATORY'}`);
+  console.log();
+
+  // Generate the kernel payload
+  log('yellow', 'Building kernel payload...');
+  const payload = generatePayload(full ? 'full' : 'mandatory', 'markdown');
+
+  // Write to temp file (ollama --system has length limits, file is safer)
+  const tempPayloadPath = path.join(PACKAGE_ROOT, 'portable', '.kernel-payload-session.md');
+  fs.mkdirSync(path.dirname(tempPayloadPath), { recursive: true });
+  fs.writeFileSync(tempPayloadPath, payload);
+
+  const tokenEstimate = full ? '~15,500' : '~10,600';
+  log('green', `Kernel payload ready (${tokenEstimate} tokens)`);
+  console.log();
+
+  // Check if model exists locally
+  try {
+    execSync(`ollama list | grep -q "${selectedModel.split(':')[0]}"`, { stdio: 'pipe' });
+  } catch {
+    log('yellow', `Model ${selectedModel} not found locally. Pulling...`);
+    try {
+      execSync(`ollama pull ${selectedModel}`, { stdio: 'inherit' });
+    } catch (error) {
+      log('red', `Failed to pull model: ${error.message}`);
+      process.exit(1);
+    }
+  }
+
+  log('green', `Launching interactive session with ${selectedModel}...`);
+  log('cyan', '─'.repeat(60));
+  console.log();
+
+  // Spawn interactive ollama session with system prompt from file
+  const child = spawn('ollama', ['run', selectedModel, '--system', payload], {
+    stdio: 'inherit',
+  });
+
+  child.on('error', (error) => {
+    log('red', `Error: ${error.message}`);
+    log('yellow', 'Make sure Ollama is installed and running: https://ollama.ai');
+    process.exit(1);
+  });
+
+  child.on('exit', (code) => {
+    console.log();
+    log('cyan', '─'.repeat(60));
+    log('blue', 'NL-OS session ended.');
+    process.exit(code || 0);
+  });
+}
+
 function payload(options = {}) {
   const {
     tier = 'mandatory',
@@ -298,7 +372,8 @@ ${colors.yellow}Usage:${colors.reset}
   nlos <command> [options]
 
 ${colors.yellow}Commands:${colors.reset}
-  boot              Boot NL-OS with a local LLM
+  chat              Interactive NL-OS chat session (recommended)
+  boot              Boot NL-OS and verify kernel loads
   payload           Generate portable kernel payloads
   verify            Verify kernel files exist
   tokens            Show token estimates
@@ -318,9 +393,10 @@ ${colors.yellow}Payload Options:${colors.reset}
   --all             Generate all variants
 
 ${colors.yellow}Examples:${colors.reset}
-  nlos boot                           # Boot with default model
-  nlos boot --model llama3.1:8b       # Boot with specific model
-  nlos boot --profile quality --full  # Quality mode with full kernel
+  nlos chat                           # Start interactive chat (recommended)
+  nlos chat --model llama3.1:8b       # Chat with specific model
+  nlos chat --profile quality --full  # Quality mode with full kernel
+  nlos boot                           # Verify kernel loads (one-shot)
   nlos boot --dry-run                 # Preview system prompt
   nlos payload                        # Generate default payload
   nlos payload --all                  # Generate all payloads
@@ -372,6 +448,10 @@ const command = args[0];
 const options = parseArgs(args.slice(1));
 
 switch (command) {
+  case 'chat':
+    chat(options);
+    break;
+
   case 'boot':
     boot(options);
     break;
