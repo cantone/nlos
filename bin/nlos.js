@@ -477,6 +477,123 @@ function payload(options = {}) {
   }
 }
 
+function init(options = {}) {
+  const targetDir = process.cwd();
+
+  log('blue', `Initializing NL-OS workspace in ${targetDir}...\n`);
+
+  // Files to copy from package to local workspace
+  const filesToCopy = [
+    { src: 'memory.md', dest: 'memory.md', desc: 'Directive stack (customize this!)' },
+    { src: 'KERNEL.md', dest: 'KERNEL.md', desc: 'Kernel entry point' },
+    { src: 'AGENTS.md', dest: 'AGENTS.md', desc: 'Agent rules and invariants' },
+    { src: 'axioms.yaml', dest: 'axioms.yaml', desc: 'Canonical definitions' },
+    { src: 'personalities.md', dest: 'personalities.md', desc: 'Voice presets' },
+  ];
+
+  const commandsToCopy = [
+    'hype.md',
+    'note.md',
+    'assume.md',
+  ];
+
+  // Create directories
+  const commandsDir = path.join(targetDir, 'commands');
+  if (!fs.existsSync(commandsDir)) {
+    fs.mkdirSync(commandsDir, { recursive: true });
+  }
+
+  // Copy kernel files
+  log('yellow', 'Copying kernel files:');
+  for (const { src, dest, desc } of filesToCopy) {
+    const srcPath = path.join(PACKAGE_ROOT, src);
+    const destPath = path.join(targetDir, dest);
+
+    if (fs.existsSync(destPath)) {
+      log('cyan', `  [skip] ${dest} (already exists)`);
+    } else if (fs.existsSync(srcPath)) {
+      fs.copyFileSync(srcPath, destPath);
+      log('green', `  [created] ${dest} - ${desc}`);
+    } else {
+      log('red', `  [missing] ${src} not found in package`);
+    }
+  }
+
+  // Copy command files
+  console.log();
+  log('yellow', 'Copying command files:');
+  for (const cmd of commandsToCopy) {
+    const srcPath = path.join(PACKAGE_ROOT, '.cursor', 'commands', cmd);
+    const destPath = path.join(commandsDir, cmd);
+
+    if (fs.existsSync(destPath)) {
+      log('cyan', `  [skip] commands/${cmd} (already exists)`);
+    } else if (fs.existsSync(srcPath)) {
+      fs.copyFileSync(srcPath, destPath);
+      log('green', `  [created] commands/${cmd}`);
+    } else {
+      log('red', `  [missing] ${cmd} not found in package`);
+    }
+  }
+
+  // Create .nlos config file
+  const configPath = path.join(targetDir, '.nlos.yaml');
+  if (!fs.existsSync(configPath)) {
+    const config = `# NL-OS Workspace Configuration
+# Generated: ${new Date().toISOString().split('T')[0]}
+
+workspace:
+  name: "${path.basename(targetDir)}"
+  initialized: true
+
+kernel:
+  # Use local files (set to false to use global package)
+  use_local: true
+
+  # Default model for this workspace
+  default_model: qwen2.5:3b
+
+  # Tier: minimal, mandatory, full
+  default_tier: minimal
+
+# Add workspace-specific settings below
+`;
+    fs.writeFileSync(configPath, config);
+    log('green', `  [created] .nlos.yaml - workspace config`);
+  }
+
+  // Create .gitignore addition
+  const gitignorePath = path.join(targetDir, '.gitignore');
+  const gitignoreContent = `# NL-OS
+.nlos-cache/
+`;
+  if (!fs.existsSync(gitignorePath)) {
+    fs.writeFileSync(gitignorePath, gitignoreContent);
+    log('green', `  [created] .gitignore`);
+  }
+
+  console.log();
+  log('green', 'Workspace initialized!\n');
+
+  console.log(`${colors.yellow}Next steps:${colors.reset}`);
+  console.log(`  1. Edit ${colors.cyan}memory.md${colors.reset} to customize your directives`);
+  console.log(`  2. Add commands to ${colors.cyan}commands/${colors.reset}`);
+  console.log(`  3. Run ${colors.cyan}nlos chat --minimal${colors.reset} to start\n`);
+
+  console.log(`${colors.yellow}Files created:${colors.reset}`);
+  console.log(`  ${targetDir}/`);
+  console.log(`  ├── KERNEL.md          # Entry point`);
+  console.log(`  ├── memory.md          # Your directives (edit this!)`);
+  console.log(`  ├── AGENTS.md          # Agent rules`);
+  console.log(`  ├── axioms.yaml        # Definitions`);
+  console.log(`  ├── personalities.md   # Voice presets`);
+  console.log(`  ├── commands/          # Your commands`);
+  console.log(`  │   ├── hype.md`);
+  console.log(`  │   ├── note.md`);
+  console.log(`  │   └── assume.md`);
+  console.log(`  └── .nlos.yaml         # Workspace config`);
+}
+
 function showHelp() {
   console.log(`
 ${colors.cyan}NL-OS${colors.reset} - Natural Language Operating System
@@ -485,6 +602,7 @@ ${colors.yellow}Usage:${colors.reset}
   nlos <command> [options]
 
 ${colors.yellow}Commands:${colors.reset}
+  init              Initialize NL-OS workspace in current directory
   chat              Interactive NL-OS chat session (recommended)
   boot              Boot NL-OS and verify kernel loads
   payload           Generate portable kernel payloads
@@ -507,7 +625,7 @@ ${colors.yellow}Payload Options:${colors.reset}
   --all             Generate all variants
 
 ${colors.yellow}Examples:${colors.reset}
-  nlos chat                           # Start interactive chat (recommended)
+  nlos init                           # Initialize workspace with kernel files
   nlos chat --minimal                 # Use minimal kernel for small models (3B)
   nlos chat --model llama3.1:8b       # Chat with specific model
   nlos chat --profile quality --full  # Quality mode with full kernel
@@ -565,6 +683,10 @@ const command = args[0];
 const options = parseArgs(args.slice(1));
 
 switch (command) {
+  case 'init':
+    init(options);
+    break;
+
   case 'chat':
     chat(options);
     break;

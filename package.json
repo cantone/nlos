@@ -1,6 +1,6 @@
 {
   "name": "nlos",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Natural Language Operating System - A model-agnostic kernel for any LLM",
   "main": "bin/nlos.js",
   "bin": {
