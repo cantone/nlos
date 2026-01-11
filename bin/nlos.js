@@ -477,6 +477,69 @@ function payload(options = {}) {
   }
 }
 
+function clean(options = {}) {
+  const { local = false, all = false } = options;
+
+  log('blue', 'Cleaning NL-OS...\n');
+
+  // Remove Ollama model
+  log('yellow', 'Removing Ollama model...');
+  try {
+    execSync('ollama rm nlos-kernel:latest', { stdio: 'pipe' });
+    log('green', '  [removed] nlos-kernel:latest');
+  } catch {
+    log('cyan', '  [skip] nlos-kernel:latest not found');
+  }
+
+  // Clean local workspace files if --local or --all
+  if (local || all) {
+    const targetDir = process.cwd();
+    const localFiles = [
+      'KERNEL.md',
+      'memory.md',
+      'AGENTS.md',
+      'axioms.yaml',
+      'personalities.md',
+      '.nlos.yaml',
+    ];
+    const localDirs = ['commands'];
+
+    log('yellow', 'Removing local workspace files...');
+    for (const file of localFiles) {
+      const filePath = path.join(targetDir, file);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        log('green', `  [removed] ${file}`);
+      }
+    }
+    for (const dir of localDirs) {
+      const dirPath = path.join(targetDir, dir);
+      if (fs.existsSync(dirPath)) {
+        fs.rmSync(dirPath, { recursive: true });
+        log('green', `  [removed] ${dir}/`);
+      }
+    }
+  }
+
+  // Uninstall global package if --all
+  if (all) {
+    log('yellow', 'Uninstalling global package...');
+    console.log();
+    log('cyan', 'Run this command to complete uninstall:');
+    console.log(`  npm uninstall -g nlos\n`);
+    log('yellow', '(Cannot self-uninstall while running)');
+  }
+
+  console.log();
+  log('green', 'Clean complete!\n');
+
+  if (!local && !all) {
+    console.log(`${colors.yellow}Options:${colors.reset}`);
+    console.log(`  nlos clean --local    Also remove local workspace files`);
+    console.log(`  nlos clean --all      Remove everything (local + instructions for global)`);
+  }
+}
+
 function init(options = {}) {
   const targetDir = process.cwd();
 
@@ -604,6 +667,7 @@ ${colors.yellow}Usage:${colors.reset}
 ${colors.yellow}Commands:${colors.reset}
   init              Initialize NL-OS workspace in current directory
   chat              Interactive NL-OS chat session (recommended)
+  clean             Remove Ollama model and optionally local files
   boot              Boot NL-OS and verify kernel loads
   payload           Generate portable kernel payloads
   verify            Verify kernel files exist
@@ -669,6 +733,8 @@ function parseArgs(args) {
       options.dryRun = true;
     } else if (arg === '--all') {
       options.all = true;
+    } else if (arg === '--local') {
+      options.local = true;
     }
 
     i++;
@@ -685,6 +751,10 @@ const options = parseArgs(args.slice(1));
 switch (command) {
   case 'init':
     init(options);
+    break;
+
+  case 'clean':
+    clean(options);
     break;
 
   case 'chat':
