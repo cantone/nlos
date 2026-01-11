@@ -520,9 +520,9 @@ function model(args = []) {
     }
     console.log();
     log('yellow', 'Commands:');
-    console.log('  nlos model use <name>    Set as default and pull if needed');
-    console.log('  nlos model pull <name>   Just pull the model');
-    console.log('  nlos model current       Show current default');
+    console.log('  nlos model use <name>       Set as default and download if needed');
+    console.log('  nlos model download <name>  Just download the model');
+    console.log('  nlos model current          Show current default');
     return;
   }
 
@@ -541,17 +541,17 @@ function model(args = []) {
     return;
   }
 
-  if (subcommand === 'pull') {
+  if (subcommand === 'download' || subcommand === 'pull') {
     if (!modelName) {
-      log('red', 'Usage: nlos model pull <name>');
+      log('red', 'Usage: nlos model download <name>');
       return;
     }
-    log('blue', `Pulling ${modelName}...`);
+    log('blue', `Downloading ${modelName}...`);
     try {
       execSync(`ollama pull ${modelName}`, { stdio: 'inherit' });
       log('green', `\nModel ${modelName} ready!`);
     } catch (error) {
-      log('red', `Failed to pull: ${error.message}`);
+      log('red', `Failed to download: ${error.message}`);
     }
     return;
   }
@@ -562,17 +562,17 @@ function model(args = []) {
       return;
     }
 
-    // Pull model if not present
+    // Download model if not present
     log('blue', `Setting up ${modelName}...\n`);
     try {
       execSync(`ollama list | grep -q "^${modelName.split(':')[0]}"`, { stdio: 'pipe' });
-      log('cyan', `Model ${modelName} already pulled`);
+      log('cyan', `Model ${modelName} already downloaded`);
     } catch {
-      log('yellow', `Pulling ${modelName}...`);
+      log('yellow', `Downloading ${modelName}...`);
       try {
         execSync(`ollama pull ${modelName}`, { stdio: 'inherit' });
       } catch (error) {
-        log('red', `Failed to pull: ${error.message}`);
+        log('red', `Failed to download: ${error.message}`);
         return;
       }
     }
@@ -597,7 +597,7 @@ function model(args = []) {
   }
 
   log('red', `Unknown subcommand: ${subcommand}`);
-  console.log('Use: nlos model list|use|pull|current');
+  console.log('Use: nlos model list|use|download|current');
 }
 
 function clean(options = {}) {
