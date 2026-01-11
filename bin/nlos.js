@@ -276,16 +276,15 @@ function chat(options = {}) {
   log('yellow', 'Building kernel payload...');
   const payload = generatePayload(full ? 'full' : 'mandatory', 'markdown');
 
-  // Write to temp file (ollama --system has length limits, file is safer)
-  const tempPayloadPath = path.join(PACKAGE_ROOT, 'portable', '.kernel-payload-session.md');
-  fs.mkdirSync(path.dirname(tempPayloadPath), { recursive: true });
-  fs.writeFileSync(tempPayloadPath, payload);
+  // Escape the payload for Modelfile SYSTEM directive
+  // Replace """ with escaped version and handle multiline
+  const escapedPayload = payload.replace(/"""/g, '\\"\\"\\"');
 
   const tokenEstimate = full ? '~15,500' : '~10,600';
   log('green', `Kernel payload ready (${tokenEstimate} tokens)`);
   console.log();
 
-  // Check if model exists locally
+  // Check if base model exists locally
   try {
     execSync(`ollama list | grep -q "${selectedModel.split(':')[0]}"`, { stdio: 'pipe' });
   } catch {
@@ -298,12 +297,42 @@ function chat(options = {}) {
     }
   }
 
-  log('green', `Launching interactive session with ${selectedModel}...`);
+  // Create a temporary Modelfile with the kernel as system prompt
+  log('yellow', 'Creating NL-OS model variant...');
+  const modelfilePath = path.join(PACKAGE_ROOT, 'portable', '.Modelfile.nlos');
+  const nlosModelName = 'nlos-kernel:latest';
+
+  const modelfileContent = `FROM ${selectedModel}
+SYSTEM """${payload}"""
+`;
+
+  fs.mkdirSync(path.dirname(modelfilePath), { recursive: true });
+  fs.writeFileSync(modelfilePath, modelfileContent);
+
+  // Create the nlos model variant
+  try {
+    execSync(`ollama create ${nlosModelName} -f "${modelfilePath}"`, {
+      stdio: 'pipe',
+      cwd: PACKAGE_ROOT
+    });
+    log('green', `Created model: ${nlosModelName}`);
+  } catch (error) {
+    log('red', `Failed to create model: ${error.message}`);
+    log('yellow', 'Falling back to manual system prompt...');
+
+    // Fallback: just run the base model and tell user to paste
+    console.log('\nCould not create kernel model. Run manually:');
+    console.log(`  ollama run ${selectedModel}`);
+    console.log('  Then paste the kernel from: portable/kernel-payload.md\n');
+    process.exit(1);
+  }
+
+  log('green', `Launching interactive session...`);
   log('cyan', '─'.repeat(60));
   console.log();
 
-  // Spawn interactive ollama session with system prompt from file
-  const child = spawn('ollama', ['run', selectedModel, '--system', payload], {
+  // Spawn interactive ollama session with the nlos model
+  const child = spawn('ollama', ['run', nlosModelName], {
     stdio: 'inherit',
   });
 

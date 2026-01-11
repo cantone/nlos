@@ -20,3 +20,4 @@ Thumbs.db
 # Generated (but we want to include portable/ payloads)
 # portable/*.md
 # portable/*.json
+.npmrc
